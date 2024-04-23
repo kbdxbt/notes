@@ -1,0 +1,1 @@
+[PHP函数速查表](https://www.p2hp.com/phpfuncs.html)
