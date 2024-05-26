@@ -1,11 +1,15 @@
 #==========================nginx全局配置==========================#
+
 # 指定 nginx 进程运行的用户，这里是 nginx，默认为nobody。
+
 user nginx;
 
 # 指定 nginx 使用多少个 worker 进程处理请求，这里使用了 auto，表示根据 CPU 核心数自动分配。
+
 worker_processes auto;
 
 # 指定 nginx 主进程的 PID 文件路径。
+
 pid /run/nginx.pid;
 
 #指定错误日志文件的路径
@@ -13,10 +17,13 @@ error_log /var/log/nginx/error.log;
 #==========================nginx全局配置==========================#
 
 ##==========================events==========================##
+
 # 事件模块的配置
+
 events {
-# 默认值512,设置每个 worker 进程的最大连接数。
-worker_connections  1024;
+
+    # 默认值512,设置每个 worker 进程的最大连接数。
+    worker_connections  1024;
 
     # 默认值off,控制是否在一次事件循环中accept多个连接请求。启用 multi_accept 可以减少 CPU 的使用和系统调用的次数，也可能会导致每个请求的响应时间增加
     multi_accept on; 
@@ -47,14 +54,18 @@ worker_connections  1024;
     kqueue_events 1024;
     kqueue_event_connections 512;
     kqueue_timeout 1s;
+
 }
 ##==========================events==========================##
 
 ##==========================http==========================##
+
 # 主要用于处理 HTTP 请求和响应，包括路由、反向代理、缓存、日志等功能。
+
 http {
-# 导入 MIME 类型的配置文件。
-include  /etc/nginx/mime.types;
+
+    # 导入 MIME 类型的配置文件。
+    include  /etc/nginx/mime.types;
 
     # 定义默认的 MIME 类型，默认为text/plain 
     default_type  application/octet-stream; 
@@ -63,7 +74,15 @@ include  /etc/nginx/mime.types;
     log_format main '$remote_addr–$remote_user [$time_local] $request $status $body_bytes_sent $http_referer $http_user_agent $http_x_forwarded_for'; 
 
     # 指定访问日志文件的路径和格式。
-    access_log  /var/log/nginx/access.log main; 
+    # access_log  /var/log/nginx/access.log main; 
+
+    #访问日志按时间切割
+    if ($time_iso8601 ~ "^(\d{4})-(\d{2})-(\d{2})") {
+        set $year $1;
+        set $month $2;
+        set $day $3;
+    }
+    access_log /var/log/nginx/$year-$month-$day-access.log;
 
     # 指定错误日志文件的路径和格式。
     error_log  /var/log/nginx/error.log main;   
@@ -89,6 +108,12 @@ include  /etc/nginx/mime.types;
     # 当服务器返回错误码时，可以显示指定的错误页面。
     error_page error_page 404 /404.html;  
 
+    # 开启前端静态文件缓存, 注意缓存时间内存在访问404问题
+    open file cache max=10000 inactive=30s;
+    open_file_cache_valid 60s:
+    open_file_cache_min_uses 2;
+    open_file_cache_errors on;
+
     ###==========================upstream=========================###
     # upstream 模块用于配置反向代理服务器组，可以将客户端请求转发到多台服务器进行处理，从而实现负载均衡和高可用性。
     upstream backend  {   
@@ -99,6 +124,10 @@ include  /etc/nginx/mime.types;
       # 使用权重进行负载平衡
       server backend3.example.com weight=3; #指定服务器的权重，缺省为 1，可以是任意正整数。
       server backend4.example.com weight=2;
+
+      # 反代转发给 PHP 服务
+      server 127.0.0.1:9006 weight=6 max_fails=300 fail_timeout=5s;
+      server 127.0.0.1:9007 weight=6 max_fails=300 fail_timeout=5s;
 
       # 使用IP Hash值进行权重进行负载平衡,确保来自同一 IP 的请求总是发送到同一服务器。
       ip_hash;
@@ -155,13 +184,16 @@ include  /etc/nginx/mime.types;
          index index.html;
       }
 
-
-
       # 当用户访问example.com/api时
       location /api {
 
         # 反向代理到 http://backend/api; 本配置中 backend 是个负载均衡器
         proxy_pass http://backend/api;
+        # 后端的Web服务器可以通过X-Forwarded-For获取用户真实IP
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
       }
 
       # 当用户访问example.com/images时
@@ -191,6 +223,19 @@ include  /etc/nginx/mime.types;
         allow 172.18.5.54; #允许的ip           
       }
 
+      # map 指令可以用于创建变量映射，用法众多，也可以匹配cookie变量等
+      map $request_uri $new_uri { # 请求地址 重定向 新地址
+         "/old/path"  "/new/path";
+         "/old/page"  "/new/page";
+         default      "/default/path";
+      }
+
+      # 微信小程序前端验证
+      location /37og2Z5TwR.txt {
+         default_type    text/html;
+         return 200 "6831c2a15d3d103c6a1ff356b22b5";
+      }
+
       # SSL 配置 监听443
       listen 443 ssl;
 
@@ -210,5 +255,27 @@ include  /etc/nginx/mime.types;
     }
 
     ###==========================server=========================###
+
 }
 ##==========================http==========================##
+
+###==========================stream=========================###
+
+# 代理实现端口转发
+
+stream {
+
+    upstream tcp_proxy {
+        hash $remote_addr consistent;  #远程地址做个hash
+        server 192.168.10.4:3306;      #转发的ip+端口
+    }
+    server {
+        listen 3306;
+        proxy_connect_timeout 1s;
+        # proxy_timeout 10s;  #后端连接超时时间
+        proxy_pass tcp_proxy;
+    }
+
+}
+
+###==========================stream=========================###
