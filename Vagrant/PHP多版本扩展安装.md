@@ -21,8 +21,12 @@ make && make install
 ### 修改php配置文件
 ```bash
 # extension=mongodb.so
-vim /etc/php/7.3/fpm/php.ini
-vim /etc/php/7.3/cli/php.ini
+cat >> /etc/php/7.3/fpm/php.ini << EOF
+extension=mongodb.so
+EOF
+cat >> /etc/php/7.3/cli/php.ini << EOF
+extension=mongodb.so
+EOF
 ```
 
 ### 重启php服务
