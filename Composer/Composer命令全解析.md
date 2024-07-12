@@ -165,6 +165,9 @@ composer update "vendor/*"
 
 # 更新依赖包到指定版本,需符合composer.json的约束
 composer update --with vendor/package:2.0.1
+
+# 通过 --with-all-dependencies 选项来允许所有依赖项进行升级
+composer update "vendor/*" "vendor1/*" --with-all-dependencies
 ```
 
 ### composer remove

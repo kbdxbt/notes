@@ -283,6 +283,8 @@
   git log v1.0.0..v1.2.1
   # 显示某个分支的日志
   $ git log master
+  # 查看所有日志记录
+  git log --all 
   ```
 
   ### git stash

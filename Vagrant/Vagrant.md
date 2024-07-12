@@ -39,7 +39,7 @@ for %%I in ("%cd%") do set "lastDir=%%~nxI"
 
 cd /D "D:\DevelopTool\VirtualMachine\homestead"
 
-vagrant ssh -c "cd /home/vagrant/Project/%lastDir% && exec bash"
+vagrant ssh -c "sudo -i bash -c 'cd /home/vagrant/project/%realDir% && exec bash'"
 
 endlocal
 ```
